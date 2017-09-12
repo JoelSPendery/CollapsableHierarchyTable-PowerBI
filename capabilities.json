@@ -1,0 +1,92 @@
+{
+    "dataRoles": [
+        {
+            "displayName": "Company Name",
+            "name": "name",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Parent Name",
+            "name": "parent",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Revenue",
+            "name": "revenue",
+            "kind": "Measure"
+        }
+    ],
+    "objects": {
+        "dataPoint": {
+            "displayName": "Data colors",
+            "properties": {
+                "defaultColor": {
+                    "displayName": "Default color",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "showAllDataPoints": {
+                    "displayName": "Show all",
+                    "type": {
+                        "bool": true
+                    }
+                },
+                "fill": {
+                    "displayName": "Fill",
+                    "type": {
+                        "fill": {
+                            "solid": {
+                                "color": true
+                            }
+                        }
+                    }
+                },
+                "fillRule": {
+                    "displayName": "Color saturation",
+                    "type": {
+                        "fill": {}
+                    }
+                },
+                 "fontSize": {
+                    "displayName": "Text Size",
+                    "type": {
+                        "formatting": {
+                            "fontSize": true
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "dataViewMappings": [
+        {
+            "table": {
+                "rows": {
+                    "select": [ 
+                        {
+                            "for": {
+                                "in": "name"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "parent"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "revenue"
+                            }
+                        }
+                    ]
+                    
+                }
+            }
+        }
+    ]
+}

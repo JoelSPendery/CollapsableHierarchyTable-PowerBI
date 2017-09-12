@@ -1,0 +1,29 @@
+{
+  "visual": {
+    "name": "myHierarchyTable",
+    "displayName": "myHierarchyTable",
+    "guid": "myHierarchyTable9860A68B10AC40F982E4AF7423F125D7",
+    "visualClassName": "Visual",
+    "version": "1.0.0",
+    "description": "",
+    "supportUrl": "",
+    "gitHubUrl": ""
+  },
+  "apiVersion": "1.7.0",
+  "author": {
+    "name": "",
+    "email": ""
+  },
+  "assets": {
+    "icon": "assets/icon.png"
+  },
+  "externalJS": [
+    "node_modules/powerbi-visuals-utils-dataviewutils/lib/index.js",
+    "node_modules/d3/d3.js",
+    "node_modules/d3-hierarchy/build/d3-hierarchy.js"
+  ],
+  "style": "style/visual.less",
+  "capabilities": "capabilities.json",
+  "dependencies": "dependencies.json",
+  "stringResources": []
+}

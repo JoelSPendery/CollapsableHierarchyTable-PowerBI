@@ -1,0 +1,11 @@
+{
+  "name": "visual",
+  "dependencies": {
+    "@types/d3": "^3.5.38",
+    "@types/d3-hierarchy": "^1.1.0",
+    "bootstrap": "^3.3.7",
+    "d3": "^3.5.17",
+    "d3-hierarchy": "^1.1.5",
+    "powerbi-visuals-utils-dataviewutils": "1.2.0"
+  }
+}
