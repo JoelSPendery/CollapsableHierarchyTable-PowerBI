@@ -45,9 +45,15 @@ module powerbi.extensibility.visual {
         private opts: powerbi.extensibility.visual.VisualUpdateOptions;
         private svg: d3.Selection<SVGElement>;
         private nodeGroup: d3.Selection<SVGElement>;
+        private treeCreate = eval("d3.stratify()").id( function(d: DataPoint): string { return d.name;}).parentId( function(d: DataPoint): string { return d.parent;});
         private source: any = null;
         private root = null;
+        private oldRevVal = [];
+        private changeRevVal: boolean = false;
+        private isRevenue: boolean;
+        // private compressInit: boolean = true;
         private vizInit: boolean = true; // 
+        private collapseBool: boolean = true;
         private margin;
         private tabWidth: number;     // width of the entire table
         private indent: number = 25;        // amount a child node is indented
@@ -58,8 +64,10 @@ module powerbi.extensibility.visual {
 
         constructor(options: VisualConstructorOptions) {
             // set values utilized in 
+
             this.margin = {top: 30, bottom: 30, left: 20, right: 20};
             this.tabWidth = 600 - this.margin.left - this.margin.right;
+            // this.oldViewPort = {height: 0, width: 0};
 
             // sets scrollbars to only show on y axis
             options.element.style.overflowY = "auto"
@@ -72,33 +80,33 @@ module powerbi.extensibility.visual {
             this.nodeGroup = this.svg.append("g")
                 .attr("transform", "translate(" + this.margin.left + "," + this.margin.top +")")
                 .classed("node-group", true);
-            
-        }
+            }
         
         public update(options: VisualUpdateOptions) { 
 
             this.opts = options;
             this.barWidth = this.tabWidth;
 
+            // create viewModel to hold the data
+            let viewModel = this.getViewModel(options);
             if (this.vizInit) {
-                // create viewModel to hold the data
-                let viewModel = this.getViewModel(options);
-                console.log(viewModel)
-                // creates the hierarchy tree relationship
-                let treeCreate = eval("d3.stratify()").id( function(d: DataPoint): string { return d.name;}).parentId( function(d: DataPoint): string { return d.parent;});
-                // this.root = treeCreate.id( function(d) {return d.name;}).parentId( function(d) {return d.parent;})(viewModel.dataPoints);
-                console.log("treeCreate")
-                this.root = treeCreate(viewModel.dataPoints);
-                console.log(this.root)
-                this.root.sum(function(d) { return d["revenue"]});
-                console.log(this.root)
-                this.root.each( function(d) { d.x0 = 0; d.y0 = 0;});
-
-            
+                // initialize the tree
+                this.root = this.treeCreate(viewModel.dataPoints);  // create hierarchy relationship from data
+                this.root.sum(function(d) { return d["revenue"]});      // sum all the revenue data
+                this.root.each( function(d) { d.x0 = 0; d.y0 = 0;});    // create starting positions for each element
+                
                 // collapse the hierarchy so that only the top nodes are showing
                 this.collapse(this.root);
+            } else {
+                // update the tree
+
+                // get new tree incorporating the new revenue values
+                let fakeRoot = this.treeCreate(viewModel.dataPoints);
+                // accumulate the revenue up the tree
+                fakeRoot.sum(function(d) { return d["revenue"]});
+                // update current tree to include updated revenue
+                this.updateVals(this.root, fakeRoot);
             }
-            
             this.clickUpdate(this.root)
 
         }
@@ -111,6 +119,7 @@ module powerbi.extensibility.visual {
             // generate layout of the hierarchy
             let nodes = d3.layout.tree().nodeSize([0,20]).nodes(this.root).slice(1);  
             let totalHeight = (nodes.length + 1) * this.barHeight;
+            
 
             // set svg attributes
             this.svg.attr("width", width).attr("height", totalHeight)
@@ -126,6 +135,7 @@ module powerbi.extensibility.visual {
                 .duration(this.duration)
                 .style("height", height + "px");
 
+            // add other attributes to the tree for visualization
             for (let ii = 0; ii < nodes.length; ii++) {
                 nodes[ii].x = ii * this.barHeight;
                 nodes[ii].y = (nodes[ii].depth - 1) * this.indent;
@@ -133,10 +143,11 @@ module powerbi.extensibility.visual {
                 nodes[ii]["txtRight"] = nodes[ii]["width"] - this.txtIndent;
             }
 
-            // Update the nodes…
+            // Binds data to node…
             let node = this.nodeGroup.selectAll(".node")
                 .data(nodes, function(n) { return eval("n.id");});
 
+            // add svg object wrapper to append rectangle objects
             var nodeEnter = node.enter().append("g")
                 .attr("class", "node")
                 .attr("transform", function(d) { return "translate( " + eval("source.y0") +", " + eval("source.x0") + ")";})
@@ -150,18 +161,29 @@ module powerbi.extensibility.visual {
                 .style("fill", this.color)
                 .on("click", this.click);
                 
-            // add text to rectangles
+            // add id text to rectangles
             nodeEnter.append("text")
                 .attr("dy", 4)
                 .attr("dx", this.txtIndent)
+                .attr("id", "id")
                 .text(function(d) { return eval("d.id");});
 
+            // add value text to rectangles
             nodeEnter.append("text")
                 .attr("dy", 4)
                 .attr("dx", function(d) {return d["txtRight"];})
                 .attr("text-anchor", "end")
-                .text(function(d) { return "$" + (Math.round(eval("d.value")*100)/100).toFixed(2);})
+                .attr("id", "rev")
 
+            // update revenue text elements of svg-grouped objects
+            if (this.isRevenue) {
+                node.selectAll("text#rev")
+                    .text(this.revenue);
+            } else {
+                node.selectAll("text#rev")
+                    .text("");
+            }
+            
             // Transition nodes to their new position.
             nodeEnter.transition()
                 .duration(this.duration)
@@ -190,7 +212,7 @@ module powerbi.extensibility.visual {
 
         }
 
-        // want initial state to be a fully collapsed hierarchy table
+        // collapse entire hierarchy table
         collapse = (d) => {
 
             function myCollapse(nodes) {
@@ -220,61 +242,93 @@ module powerbi.extensibility.visual {
             this.clickUpdate(d);
         }
 
+        private updateVals(node, fakeNode) {
+            let children, fakeNodeChil = fakeNode, nodeChil = node, n, ii, strVal;
+            do {
+                // update value of current node
+                nodeChil["value"] = fakeNodeChil["value"];
+
+                // find if there are children
+                if (nodeChil["children"]) {
+                    strVal = "children";
+                } else if (nodeChil["_children"]) {
+                    strVal = "_children";
+                } else { return;}
+                
+                // get children nodes
+                nodeChil = nodeChil[strVal];    
+                // go through each child and recurse function
+                for (ii = 0; ii < nodeChil.length; ii++) {
+                    this.updateVals(nodeChil[ii], fakeNodeChil["children"][ii]);
+                }
+            } while (node["children"] || node["_children"])
+            
+            this.root = nodeChil;
+        }
+
+        private revenue = (d) => {
+            return "$" + (Math.round(eval("d.value")*100)/100).toFixed(2);
+        }
+
         public color(d) {
             return d._children ? "#3182bd" : d.children ? "#b4c2cb" : "#ffffff";
         }
 
         private getViewModel(options: VisualUpdateOptions): ViewModel {
-            
+            // get data
             let dv = options.dataViews[0];
-            // console.log(dv)
 
+            // initialize empty viewModel
             let viewModel: ViewModel = {
                 dataPoints: []
             };
 
+            // check to see if there are parent/child values to build the tree
             if (!dv
-                || !dv
-                || !dv.table
-                || !dv.table.columns
-                || !dv.table.rows)
-                return viewModel;
+                || !dv.categorical
+                || !dv.categorical.categories
+                || !dv.categorical.categories[0]
+                || !dv.categorical.categories[1]
+                ) return viewModel; // if not enough values, then return an empty viewModel
             
-            let rowData = dv.table.rows;
-            let colData = dv.table.columns;
-            // indices of the company name, parent name and revenue values
-            let nameInd = null; 
-            let parentInd = null;
-            let revInd = null;
+            // check to see if there are revenue values
+            let revVal = [];
+            if (!dv.categorical.values
+                || !dv.categorical.values[0]
+                || !dv.categorical.values[0].values) {
+                // if no revenue values, don't do anything
+                this.isRevenue = false;
+            } else {
+                revVal = dv.categorical.values[0].values;   // get revenue values
+                this.isRevenue = true;
+            }
 
-            console.log(rowData)
-    
-            for (let ii = 0; ii < colData.length; ii++) {
-                switch (colData[ii].displayName) {
-                    case "Name":
-                        nameInd = ii;
-                        break;
-
-                    case "Parent":
-                        parentInd = ii;
-                        break;
-                    
-                    case "Revenue":
-                        revInd = ii;
-                        break;
+            // get name and parent data
+            let nameVal = dv.categorical.categories[0].values;
+            let parentVal = dv.categorical.categories[1].values;
+ 
+            // push data into viewModel
+            if (this.isRevenue) {
+                // with revenue data
+                for (let ii = 0; ii < Math.max(revVal.length, nameVal.length, parentVal.length); ii++) {
+                    viewModel.dataPoints.push({
+                        name: <string>nameVal[ii],
+                        parent: <string>parentVal[ii],
+                        revenue: <number>revVal[ii]
+                    });
+                }
+            } else {
+                // without revenue data
+                for (let ii = 0; ii < Math.max(revVal.length, nameVal.length, parentVal.length); ii++) {
+                    viewModel.dataPoints.push({
+                        name: <string>nameVal[ii],
+                        parent: <string>parentVal[ii],
+                        revenue: 0
+                    });
                 }
             }
 
-            console.log(revInd)
-            for (let ii = 0; ii < rowData.length; ii++) {
-
-                viewModel.dataPoints.push({
-                    name: <string>rowData[ii][nameInd],
-                    parent: <string>rowData[ii][parentInd],
-                    revenue: <number>rowData[ii][revInd]
-                });
-            }
-
+            // add a place holder tree root node in case there are multiple tree roots
             viewModel.dataPoints.push({name: "hierTop", parent: "", revenue: 0});
 
             return viewModel;
